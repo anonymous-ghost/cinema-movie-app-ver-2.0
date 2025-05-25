@@ -102,6 +102,9 @@
     "description1": "Jake Sully lives with his newfound family formed on the planet of Pandora. He must work with Neytiri and the army of the Na'vi race to protect their home from new threats."
   },
   "booking": {
+    "bookingSuccess": "Booking Successful!",
+    "bookingId": "Booking ID",
+    "viewBookings": "View My Bookings",
     "bookingOptions": "Booking Options",
     "howContinue": "How would you like to continue?",
     "bookingAdded": "Booking added",
@@ -122,6 +125,10 @@
     "confirmCancellation": "Are you sure you want to cancel this booking?"
   },
   "payment": {
+    "sendEmailConfirmation": "Send booking confirmation to email",
+    "email": "Email Address",
+    "confirmationSent": "Booking confirmation has been sent to your email",
+    "error": "Payment processing failed. Please try again.",
     "cardNumber": "Card Number",
     "cardholderName": "Cardholder Name",
     "expiryDate": "Expiry Date",

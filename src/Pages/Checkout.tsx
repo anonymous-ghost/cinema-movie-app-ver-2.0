@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useBookings } from '../contexts/BookingsContext';
-import { useFilms } from '../contexts/FilmsContext';
-import { useSessions } from '../contexts/SessionsContext';
-import { BookingStatus, PaymentMethod, PaymentStatus } from '../types/movie';
-import '../styles/Checkout.css';
+import { useAuth } from '@/contexts/AuthContext';
+import { useBookings } from '@/contexts/BookingsContext';
+import { useFilms } from '@/contexts/FilmsContext';
+import { useSessions } from '@/contexts/SessionsContext';
+import { BookingStatus, PaymentMethod } from '@/types/movie';
+import '@/styles/Checkout.css';
 import { useTranslation } from 'react-i18next';
+import { generateQRCode, sendBookingConfirmation, BookingDetails } from '@/utils/emailService';
 
 interface LocationState {
   bookingId?: string;
@@ -31,8 +32,11 @@ const Checkout = () => {
   const [cardName, setCardName] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
+  const [email, setEmail] = useState('');
+  const [sendConfirmation, setSendConfirmation] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
   
   // Get session and film details
   const session = sessions.find(s => s.id === sessionId);
@@ -82,6 +86,12 @@ const Checkout = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!currentUser) return;
+    if (!cardNumber || cardNumber.length < 16) {
+      setError(t('payment.invalidCard'));
+      return;
+    }
+    
     // Basic validation
     if (!cardNumber || !cardName || !expiryDate || !cvv) {
       setError('Please fill in all payment fields');
@@ -97,7 +107,22 @@ const Checkout = () => {
       setError('Invalid CVV');
       return;
     }
+
+    // Email validation if sending confirmation
+    if (sendConfirmation) {
+      if (!email) {
+        setEmailError('Please enter your email address');
+        return;
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setEmailError('Please enter a valid email address');
+        return;
+      }
+    }
     
+    setEmailError('');
     setIsProcessing(true);
     setError('');
     
@@ -105,38 +130,61 @@ const Checkout = () => {
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      if (booking) {
-        // Update existing booking
-        updateBookingStatus(booking.id, BookingStatus.PAID);
-      } else if (currentUser && session && state?.selectedSeats) {
-        // Create new booking
-        const newBooking = {
-          id: `booking_${Date.now()}`,
-          userId: currentUser.id,
-          sessionId: session.id,
-          seats: state.selectedSeats,
-          totalPrice,
-          bookingDate: new Date().toISOString(),
-          status: BookingStatus.PAID,
-          paymentId: `pay_${Date.now()}`
-        };
-        
-        addBooking(newBooking);
+      const newBookingId = `booking-${Date.now()}`;
+      const bookingDetails: BookingDetails = {
+        id: state?.bookingId || newBookingId,
+        filmTitle: film?.title || '',
+        sessionDate: session?.date || '',
+        sessionTime: session?.time || '',
+        seats: selectedSeats,
+        totalPrice,
+        customerName: currentUser.name || currentUser.email,
+        customerEmail: email || currentUser.email,
+        cardNumber: cardNumber.slice(-4) // Only store last 4 digits
+      };
+      
+      // Update booking status if editing
+      if (state?.bookingId) {
+        await updateBookingStatus(state.bookingId, BookingStatus.PAID);
       }
-      
-      // Navigate to success page or bookings
-      navigate('/bookings', { 
+      // Add new booking if creating
+      else {
+        const newBooking = {
+          id: bookingDetails.id,
+          userId: currentUser?.id || '',
+          sessionId: session?.id || '',
+          seats: selectedSeats,
+          status: BookingStatus.PAID,
+          paymentMethod,
+          totalPrice,
+          bookingDate: new Date().toISOString()
+        };
+        await addBooking(newBooking);
+      }
+
+      // Send email confirmation if requested
+      let emailSent = false;
+      if (sendConfirmation && email) {
+        try {
+          const qrCodeDataUrl = await generateQRCode(bookingDetails);
+          await sendBookingConfirmation(bookingDetails, qrCodeDataUrl);
+          emailSent = true;
+        } catch (emailError: any) {
+          console.error('Error sending email confirmation:', emailError);
+          // Continue with success navigation even if email fails
+        }
+      }
+
+      // Redirect to success page
+      navigate('/booking-success', {
         state: { 
-          paymentSuccess: true,
-          filmTitle: film?.title,
-          sessionDate: session?.date,
-          sessionTime: session?.time
-        } 
+          bookingId: bookingDetails.id,
+          emailSent
+        }
       });
-      
-    } catch (err) {
-      setError('Payment processing failed. Please try again.');
-      console.error(err);
+    } catch (error: any) {
+      console.error('Error processing booking:', error);
+      setError(t('payment.error'));
     } finally {
       setIsProcessing(false);
     }
@@ -265,6 +313,36 @@ const Checkout = () => {
                   required
                 />
               </div>
+            </div>
+
+            <div className="form-group email-confirmation">
+              <div className="checkbox-container">
+                <input
+                  type="checkbox"
+                  id="send-confirmation"
+                  checked={sendConfirmation}
+                  onChange={(e) => setSendConfirmation(e.target.checked)}
+                />
+                <label htmlFor="send-confirmation">{t('payment.sendEmailConfirmation')}</label>
+              </div>
+              
+              {sendConfirmation && (
+                <div className="email-input-container">
+                  <label htmlFor="email">{t('payment.email')}</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailError('');
+                    }}
+                    placeholder="your.email@example.com"
+                    required={sendConfirmation}
+                  />
+                  {emailError && <div className="error-message">{emailError}</div>}
+                </div>
+              )}
             </div>
             
             <button 

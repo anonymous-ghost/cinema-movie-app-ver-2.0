@@ -23,8 +23,8 @@ import Register from "./Pages/Register";
 import Profile from "./Pages/Profile";
 import Bookings from "./Pages/Bookings";
 import Checkout from "./Pages/Checkout";
-import { Search as SearchIcon } from "lucide-react";
 import Search from "./Pages/Search";
+import BookingSuccess from "./Pages/BookingSuccess";
 
 
 const App = () => {
@@ -53,6 +53,7 @@ const App = () => {
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/bookings" element={<Bookings />} />
                   <Route path="/checkout/:sessionId" element={<Checkout />} />
+                  <Route path="/booking-success" element={<BookingSuccess />} />
                 </Routes>
 
                 <Footer />
