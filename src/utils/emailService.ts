@@ -1,4 +1,5 @@
 import emailjs from '@emailjs/browser';
+import { generateStaticQRCode, getStaticQRCodeUrl } from './staticQRCode';
 
 // EmailJS credentials from environment variables
 const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
@@ -24,12 +25,15 @@ export interface BookingDetails {
  */
 export const generateQRCode = async (booking: BookingDetails): Promise<string> => {
   try {
-    // Create a unique identifier for this booking
-    const uniqueId = `${booking.id}-${new Date().getTime()}`;
+    // Створюємо спрощений рядок з даними для QR-коду (зменшуємо довжину)
+    // Використовуємо тільки ID бронювання, щоб зменшити довжину URL
+    const qrData = `ID:${booking.id}`;
     
-    // Generate static QR code URL with the booking ID
-    // This will be different for each booking but simple enough to display correctly
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${uniqueId}&format=png`;
+    // Кодуємо дані для уникнення проблем з URL
+    const encodedData = encodeURIComponent(qrData);
+    
+    // Використовуємо простіший URL для QR-коду
+    return `https://chart.googleapis.com/chart?chs=150x150&cht=qr&chl=${encodedData}`;
   } catch (error) {
     console.error('Error generating QR code:', error);
     throw error;
@@ -39,10 +43,10 @@ export const generateQRCode = async (booking: BookingDetails): Promise<string> =
 /**
  * Sends a booking confirmation email with QR code
  * @param booking The booking details
- * @param qrCodeDataUrl The generated QR code as a data URL
+ * @param qrCodeDataUrl The generated QR code as a data URL (optional, will use static QR if not provided)
  * @returns Promise resolving when email is sent
  */
-export async function sendBookingConfirmation(bookingDetails: BookingDetails, qrCodeUrl: string): Promise<void> {
+export async function sendBookingConfirmation(bookingDetails: BookingDetails, qrCodeUrl?: string): Promise<void> {
   try {
     // Format seats with Ukrainian text
     const formattedSeats = bookingDetails.seats
@@ -51,7 +55,12 @@ export async function sendBookingConfirmation(bookingDetails: BookingDetails, qr
       )
       .join(', ');
 
+    // Використовуємо статичний QR-код, якщо динамічний не передано або виникли проблеми
+    const staticQrCodeUrl = generateStaticQRCode(bookingDetails.id);
+    const finalQrCodeUrl = qrCodeUrl || staticQrCodeUrl;
+
     const templateParams = {
+      // Використовуємо тільки to_email для отримувача, не змінюємо from_email
       to_email: bookingDetails.customerEmail,
       customer_name: bookingDetails.customerName,
       customer_email: bookingDetails.customerEmail,
@@ -62,24 +71,33 @@ export async function sendBookingConfirmation(bookingDetails: BookingDetails, qr
       seats: formattedSeats,
       total_price: `${bookingDetails.totalPrice} UAH`,
       card_number: bookingDetails.cardNumber,
-      qr_code: qrCodeUrl,
-      template_style: `
-        background-color: #0F1117;
-        color: #ffffff;
-        font-family: Arial, sans-serif;
-      `,
-      gradient_title: `
-        background: linear-gradient(90deg, #3B82F6 0%, #9333EA 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      `,
+      // Використовуємо статичний QR-код
+      qr_code: finalQrCodeUrl,
+      // Спрощуємо стилі для зменшення розміру запиту
+      template_style: 'background-color: #0F1117; color: #ffffff; font-family: Arial, sans-serif;',
+      gradient_title: 'background: linear-gradient(90deg, #3B82F6 0%, #9333EA 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;',
       accent_color: '#3B82F6',
       border_color: '#2A2C34',
       bg_dark: '#1A1C24'
     };
 
-    // Send email
-    await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+    // Додаємо затримку перед відправкою для уникнення обмежень API
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Відправляємо email з обробкою помилок
+    try {
+      await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+      console.log('Email sent successfully to:', bookingDetails.customerEmail);
+    } catch (emailError: any) {
+      // Виводимо детальну інформацію про помилку
+      console.error('EmailJS error details:', {
+        status: emailError.status,
+        text: emailError.text,
+        serviceId: SERVICE_ID,
+        templateId: TEMPLATE_ID
+      });
+      throw emailError;
+    }
   } catch (error) {
     console.error('Error sending booking confirmation email:', error);
     throw error;
