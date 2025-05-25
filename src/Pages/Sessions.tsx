@@ -119,7 +119,8 @@ const Sessions = () => {
     
     // Calculate total price
     const totalPrice = processedSeats.reduce((total, seat) => {
-      const rowPrice = selectedSession.priceByRow?.[seat.row] || selectedSession.price;
+      // Додаємо 1 до індексу ряду, оскільки в priceByRow нумерація починається з 1
+      const rowPrice = selectedSession.priceByRow?.[seat.row + 1] || selectedSession.price;
       return total + rowPrice;
     }, 0);
     
@@ -344,7 +345,7 @@ const Sessions = () => {
                       >
                         {t('common.bookTickets')}
                       </button>
-                      <span className="price">{session.price} UAH</span>
+                      <span className="price">{t('common.from')} {session.priceByRow ? Math.min(...Object.values(session.priceByRow)) : session.price} UAH</span>
                     </div>
                   </div>
                 </div>

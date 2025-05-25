@@ -75,7 +75,8 @@ const Checkout = () => {
     
     return selectedSeats.reduce((total, seat) => {
       // Get price for this specific seat's row
-      const rowPrice = session.priceByRow?.[seat.row] || session.price;
+      // Додаємо 1 до індексу ряду, оскільки в priceByRow нумерація починається з 1
+      const rowPrice = session.priceByRow?.[seat.row + 1] || session.price;
       return total + rowPrice;
     }, 0);
   };
