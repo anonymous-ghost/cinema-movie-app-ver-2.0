@@ -19,8 +19,8 @@ interface QRCodeGeneratorProps {
 const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   value,
   size = 200,
-  bgColor = '#FFFFFF',
-  fgColor = '#000000',
+  bgColor = '#yellow',
+  fgColor = 'black',
   level = 'L',
   includeMargin = true,
   imageSettings,
